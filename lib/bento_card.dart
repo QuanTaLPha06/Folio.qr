@@ -24,10 +24,10 @@ class BentoCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: ThemeConstants.cardColor,
         borderRadius: BorderRadius.circular(24), // Rounded corners like iOS widgets
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        border: Border.all(color: Colors.white.withValues(alpha: .05)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.2),
+            color: Colors.black.withValues(alpha: .2),
             blurRadius: 10,
             offset: const Offset(0, 5),
           ),
