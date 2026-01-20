@@ -12,8 +12,11 @@ dependencies:
     sdk: flutter
   http: ^1.2.0
   url_launcher: ^6.2.0
+  fl_chart: ^0.71.0
   google_fonts: ^6.1.0
   font_awesome_flutter: ^10.6.0 # Great for GitHub/Social icons
   qr_flutter: ^4.1.0
   flutter_web_plugins:
     sdk: flutter
+  intl: ^0.20.2
+    

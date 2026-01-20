@@ -1,290 +1,237 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:url_launcher/url_launcher.dart'; // Add url_launcher to pubspec
-import 'theme_constants.dart';
-import 'bento_card.dart';
-import 'github_service.dart';
+import 'package:http/http.dart' as http;
+import 'package:fl_chart/fl_chart.dart'; 
+import 'package:url_launcher/url_launcher.dart';
+// REMOVED: import 'package:intl/intl.dart'; <-- This was causing your error
 
 class BentoHome extends StatefulWidget {
-  final String username; // Pass username here
-
-  const BentoHome({Key? key, required this.username}) : super(key: key);
+  final String username;
+  const BentoHome({super.key, required this.username});
 
   @override
   State<BentoHome> createState() => _BentoHomeState();
 }
 
 class _BentoHomeState extends State<BentoHome> {
-  late Future<GithubData> _futureData;
-  final GithubService _service = GithubService();
+  Map profile = {};
+  List repos = [];
+  List events = [];
+  bool loading = true;
+  bool hasError = false;
 
   @override
   void initState() {
     super.initState();
-    _futureData = _service.fetchGithubData(widget.username);
+    fetchData();
   }
 
-  // Helper to open links
-  Future<void> _launchUrl(String urlString) async {
-    if (urlString.isEmpty) return;
-    final Uri url = Uri.parse(urlString);
-    if (!await launchUrl(url)) {
-      throw Exception('Could not launch $url');
+  Future<void> fetchData() async {
+    try {
+      final userRes = await http.get(Uri.parse("https://api.github.com/users/${widget.username}"));
+      final repoRes = await http.get(Uri.parse("https://api.github.com/users/${widget.username}/repos?per_page=100"));
+      final eventRes = await http.get(Uri.parse("https://api.github.com/users/${widget.username}/events?per_page=10"));
+
+      if (userRes.statusCode == 200 && repoRes.statusCode == 200) {
+        setState(() {
+          profile = json.decode(userRes.body);
+          repos = json.decode(repoRes.body);
+          events = json.decode(eventRes.body);
+          loading = false;
+        });
+      } else {
+        setState(() { loading = false; hasError = true; });
+      }
+    } catch (e) {
+      setState(() { loading = false; hasError = true; });
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (loading) return const Scaffold(backgroundColor: Color(0xFF0E0E13), body: Center(child: CircularProgressIndicator()));
+    if (hasError) return const Scaffold(backgroundColor: Color(0xFF0E0E13), body: Center(child: Text("User not found", style: TextStyle(color: Colors.white))));
+
+    Map<String, int> langCount = {};
+    for (var r in repos) {
+      if (r["language"] != null) langCount[r["language"]] = (langCount[r["language"]] ?? 0) + 1;
+    }
+    final topLangs = langCount.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final topRepos = repos..sort((a, b) => (b["stargazers_count"] ?? 0).compareTo(a["stargazers_count"] ?? 0));
+
     return Scaffold(
-      backgroundColor: ThemeConstants.scaffoldBg,
-      body: FutureBuilder<GithubData>(
-        future: _futureData,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: ThemeConstants.accentColor));
-          } else if (snapshot.hasError) {
-            return Center(child: Text("Error: ${snapshot.error}", style: const TextStyle(color: Colors.white)));
-          } else if (snapshot.hasData) {
-            final user = snapshot.data!.user;
-            final repos = snapshot.data!.repos;
-
-            return SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 40),
-              child: Column(
-                children: [
-                  const SizedBox(height: 20),
-                  
-                  // --- 1. PROFILE IMAGE (Large, Top) ---
-                  Container(
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(color: ThemeConstants.accentColor, width: 3),
-                      boxShadow: [BoxShadow(color: ThemeConstants.accentColor.withValues(alpha: .3), blurRadius: 20)],
-                    ),
-                    child: CircleAvatar(
-                      radius: 60,
-                      backgroundImage: NetworkImage(user['avatar_url']),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // --- 2. NAME & USERNAME ---
-                  Text(
-                    user['name'] ?? "No Name",
-                    style: ThemeConstants.titleStyle.copyWith(fontSize: 28),
-                    textAlign: TextAlign.center,
-                  ),
-                  Text(
-                    "@${user['login']}",
-                    style: ThemeConstants.subtitleStyle.copyWith(color: ThemeConstants.accentColor),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // --- 3. BIO ---
-                  if (user['bio'] != null)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: Text(
-                        user['bio'],
-                        style: ThemeConstants.bioStyle,
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  const SizedBox(height: 12),
-
-                  // --- 4. LOCATION (City, Country with GPS Icon) ---
-                  if (user['location'] != null)
+      backgroundColor: const Color(0xFF0E0E13),
+      appBar: AppBar(title: Text("@${widget.username}"), backgroundColor: Colors.transparent, elevation: 0),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Center(
+          child: Wrap(
+            spacing: 20,
+            runSpacing: 20,
+            alignment: WrapAlignment.center,
+            children: [
+              
+              // 1. PROFILE CARD + STATS
+              _card(
+                Column(
+                  children: [
+                    CircleAvatar(radius: 40, backgroundImage: NetworkImage(profile["avatar_url"])),
+                    const SizedBox(height: 10),
+                    Text(profile["name"] ?? widget.username, style: const TextStyle(fontSize: 20, color: Colors.white, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 5),
+                    Text(profile["bio"] ?? "Dev", style: const TextStyle(color: Colors.grey, fontSize: 12), textAlign: TextAlign.center),
+                    const SizedBox(height: 15),
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        const Icon(Icons.location_on, color: Colors.redAccent, size: 18),
-                        const SizedBox(width: 5),
-                        Text(
-                          user['location'],
-                          style: ThemeConstants.subtitleStyle.copyWith(fontSize: 14),
-                        ),
+                        _statItem("Repos", "${profile['public_repos']}"),
+                        _statItem("Followers", "${profile['followers']}"),
+                        _statItem("Following", "${profile['following']}"),
                       ],
-                    ),
-                  
-                  const SizedBox(height: 24),
+                    )
+                  ],
+                ),
+              ),
 
-                  // --- 5. CONNECTIONS (GitHub, Email, Blog) ---
-                  // Using a Row of Bento Cards
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildConnectionCard(
-                          icon: FontAwesomeIcons.github,
-                          label: "GitHub",
-                          color: Colors.black, // Github color
-                          onTap: () => _launchUrl(user['html_url']),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      if (user['email'] != null) ...[
-                        Expanded(
-                          child: _buildConnectionCard(
-                            icon: Icons.email,
-                            label: "Email",
-                            color: Colors.blue,
-                            onTap: () => _launchUrl("mailto:${user['email']}"),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                      ],
-                      if (user['blog'] != null && user['blog'].toString().isNotEmpty)
-                        Expanded(
-                          child: _buildConnectionCard(
-                            icon: Icons.link,
-                            label: "Website",
-                            color: Colors.purple,
-                            onTap: () => _launchUrl(user['blog'].startsWith('http') ? user['blog'] : 'https://${user['blog']}'),
-                          ),
-                        ),
-                    ],
+              // 2. RECENT ACTIVITY TABLE
+              if (events.isNotEmpty)
+                Container(
+                  width: 320,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1A1A22),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.white.withValues(alpha: .05)),
                   ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text("Recent Activity", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.greenAccent)),
+                      const SizedBox(height: 10),
+                      ...events.take(5).map((e) {
+                        String type = e['type'];
+                        String repoName = e['repo']['name'].toString().split('/').last;
+                        
+                        // FIXED: Manual String Date Logic (No Package Needed)
+                        String date = "Unknown";
+                        if (e['created_at'] != null && e['created_at'].toString().length >= 10) {
+                           date = e['created_at'].toString().substring(0, 10);
+                        }
 
-                  const SizedBox(height: 24),
-                  Align(alignment: Alignment.centerLeft, child: Text("Top Projects", style: ThemeConstants.titleStyle)),
-                  const SizedBox(height: 12),
+                        if (type == 'PushEvent') type = '🚀 Pushed';
+                        else if (type == 'WatchEvent') type = '⭐ Starred';
+                        else if (type == 'CreateEvent') type = '🆕 Created';
+                        else if (type == 'PullRequestEvent') type = '🔀 PR';
+                        else type = '📝 Activity';
 
-                  // --- 6. TOP 7 PROJECTS (Horizontal Scroll) ---
-                  SizedBox(
-                    height: 180, // Height of the horizontal list
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: repos.length,
-                      itemBuilder: (context, index) {
-                        final repo = repos[index];
                         return Padding(
-                          padding: const EdgeInsets.only(right: 12),
-                          child: BentoCard(
-                            width: 260,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        const Icon(FontAwesomeIcons.bookBookmark, color: Colors.white54, size: 16),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            repo['name'], 
-                                            style: ThemeConstants.titleStyle.copyWith(fontSize: 16),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      repo['description'] ?? "No description provided.",
-                                      style: ThemeConstants.bioStyle.copyWith(fontSize: 12),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
-                                ),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        const Icon(Icons.star_rounded, color: Colors.amber, size: 20),
-                                        const SizedBox(width: 4),
-                                        Text("${repo['stargazers_count']}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                        const SizedBox(width: 12),
-                                        CircleAvatar(backgroundColor: _getLanguageColor(repo['language']), radius: 5),
-                                        const SizedBox(width: 4),
-                                        Text(repo['language'] ?? "N/A", style: const TextStyle(color: Colors.white70, fontSize: 12)),
-                                      ],
-                                    ),
-                                    IconButton(
-                                      onPressed: () => _launchUrl(repo['html_url']),
-                                      icon: const Icon(Icons.arrow_outward, color: ThemeConstants.accentColor),
-                                      padding: EdgeInsets.zero,
-                                      constraints: const BoxConstraints(),
-                                    )
-                                  ],
-                                )
-                              ],
-                            ),
+                          padding: const EdgeInsets.symmetric(vertical: 6.0),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(type, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                                  const SizedBox(width: 5),
+                                  SizedBox(
+                                    width: 100,
+                                    child: Text(repoName, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12), overflow: TextOverflow.ellipsis),
+                                  ),
+                                ],
+                              ),
+                              Text(date, style: const TextStyle(color: Colors.white30, fontSize: 10)),
+                            ],
                           ),
                         );
-                      },
-                    ),
+                      }),
+                    ],
                   ),
+                ),
 
-                  const SizedBox(height: 24),
-
-                  // --- 7. FOOTER (Connect with me Box) ---
-                  BentoCard(
-                    width: double.infinity,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text("Connect with me", style: ThemeConstants.titleStyle.copyWith(fontSize: 18)),
-                        const SizedBox(height: 10),
-                        const Text(
-                          "Open to collaborations and freelance work. Check out my repositories for more details.",
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                        const SizedBox(height: 15),
-                        ElevatedButton(
-                          onPressed: () => _launchUrl(user['html_url']),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: ThemeConstants.accentColor,
-                            foregroundColor: Colors.black,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              // 3. CHART CARD
+              if (topLangs.isNotEmpty)
+                _card(
+                  SizedBox(
+                    width: 300, height: 220,
+                    child: BarChart(
+                      BarChartData(
+                        gridData: FlGridData(show: false),
+                        borderData: FlBorderData(show: false),
+                        titlesData: FlTitlesData(
+                          show: true,
+                          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: true, reservedSize: 40, getTitlesWidget: (value, meta) {
+                              if (value.toInt() >= topLangs.take(5).length) return const SizedBox();
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 8.0),
+                                child: Transform.rotate(
+                                  angle: -0.3, 
+                                  child: Text(topLangs[value.toInt()].key, style: const TextStyle(color: Colors.white70, fontSize: 10)),
+                                ),
+                              );
+                            }),
                           ),
-                          child: const Text("View Full Profile on GitHub", style: TextStyle(fontWeight: FontWeight.bold)),
-                        )
-                      ],
+                        ),
+                        barGroups: List.generate(topLangs.take(5).length, (i) => BarChartGroupData(x: i, barRods: [BarChartRodData(toY: topLangs[i].value.toDouble(), color: Colors.blueAccent, width: 14, borderRadius: BorderRadius.circular(4))])),
+                      ),
                     ),
                   ),
-                  
-                  const SizedBox(height: 30),
-                ],
-              ),
-            );
-          }
-          return const SizedBox();
-        },
-      ),
-    );
-  }
+                ),
 
-  // Small helper widget for the Connections row
-  Widget _buildConnectionCard({required IconData icon, required String label, required Color color, required VoidCallback onTap}) {
-    return GestureDetector(
-      onTap: onTap,
-      child: BentoCard(
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        child: Column(
-          children: [
-            Icon(icon, color: color == Colors.black ? Colors.white : color, size: 28),
-            const SizedBox(height: 8),
-            Text(label, style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
-          ],
+              // 4. TOP PROJECTS LIST
+              _card(
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("Top Projects", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                    const SizedBox(height: 10),
+                    ...topRepos.take(5).map((r) => ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(r["name"], style: const TextStyle(color: Colors.white, fontSize: 14)),
+                      subtitle: Text(r["language"] ?? "Code", style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                      trailing: const Icon(Icons.arrow_forward, size: 14, color: Colors.white30),
+                      onTap: () => launchUrl(Uri.parse(r["html_url"])),
+                    ))
+                  ],
+                ),
+              ),
+
+              // 5. CONNECT CARD
+              _card(
+                Column(
+                  children: [
+                    const Text("Connect", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                    const SizedBox(height: 10),
+                    TextButton(
+                      onPressed: () => launchUrl(Uri.parse(profile["html_url"])),
+                      child: const Text("View GitHub Profile", style: TextStyle(fontSize: 16)),
+                    )
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  // Helper for language dot colors
-  Color _getLanguageColor(String? language) {
-    if (language == null) return Colors.grey;
-    switch (language.toLowerCase()) {
-      case 'dart': return Colors.blue;
-      case 'python': return Colors.yellow;
-      case 'javascript': return Colors.amber;
-      case 'html': return Colors.orange;
-      case 'css': return Colors.blueAccent;
-      default: return ThemeConstants.accentColor;
-    }
+  Widget _card(Widget child) {
+    return Container(
+      width: 320, padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(color: const Color(0xFF1A1A22), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha: 0.05))),
+      child: child,
+    );
+  }
+
+  Widget _statItem(String label, String value) {
+    return Column(
+      children: [
+        Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+        Text(label, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+      ],
+    );
   }
 }
