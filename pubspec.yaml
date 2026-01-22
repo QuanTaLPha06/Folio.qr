@@ -14,9 +14,18 @@ dependencies:
   url_launcher: ^6.2.0
   fl_chart: ^0.71.0
   google_fonts: ^6.1.0
-  font_awesome_flutter: ^10.6.0 # Great for GitHub/Social icons
+  font_awesome_flutter: ^10.6.0
   qr_flutter: ^4.1.0
+  intl: ^0.20.2
   flutter_web_plugins:
     sdk: flutter
-  intl: ^0.20.2
-    
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+# THIS WAS MISSING
+flutter:
+  uses-material-design: true
+  

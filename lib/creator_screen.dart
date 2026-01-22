@@ -31,7 +31,7 @@ class _CreatorScreenState extends State<CreatorScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF0F0F13), // Dark background
       appBar: AppBar(
-        title: const Text("Folio.QR Creator"),
+        title: const Text("GitBento"),
         backgroundColor: Colors.transparent,
         elevation: 0,
       ),
@@ -63,7 +63,7 @@ class _CreatorScreenState extends State<CreatorScreen> {
                 fillColor: const Color(0xFF1C1C23),
                 hintText: "GitHub Username (e.g. kevin15)",
                 hintStyle: const TextStyle(color: Colors.white38),
-                prefixIcon: const Icon(Icons.person, color: Colors.orange),
+                prefixIcon: const Icon(Icons.person, color: Color.fromARGB(255, 0, 162, 255)),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -79,7 +79,7 @@ class _CreatorScreenState extends State<CreatorScreen> {
               child: ElevatedButton(
                 onPressed: _generateQR,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange,
+                  backgroundColor: const Color.fromARGB(255, 0, 162, 255),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
                 child: const Text("Generate QR Code", style: TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.bold)),
@@ -96,7 +96,7 @@ class _CreatorScreenState extends State<CreatorScreen> {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [
-                    BoxShadow(color: Colors.orange.withValues(alpha:.2), blurRadius: 20, spreadRadius: 5)
+                    BoxShadow(color: const Color.fromARGB(255, 0, 204, 255).withValues(alpha:.2), blurRadius: 20, spreadRadius: 5)
                   ],
                 ),
                 child: Column(
